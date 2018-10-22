@@ -4,6 +4,9 @@ import math
 class Camera:
     def __init__(self):
         self.p = vector.o.copy()
+        self.unrotate()
+
+    def unrotate(self):
         self.x = vector.x.copy() # right (-left)
         self.y = vector.y.copy() # back (-front)
         self.z = vector.z.copy() # up (-down)

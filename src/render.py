@@ -109,11 +109,14 @@ def render_scene(game):
     render_mesh(game.river[1])
     render_mesh(game.river[2])
     render_mesh(game.river[3])
+    render_mesh(game.river[4])
+    render_mesh(game.river[5])
+    render_mesh(game.river[6])
+    render_mesh(game.river[7])
 
-    raft = Camera()
-    raft.shift(64, 64)
-    for c in [raft]:
-        mesh = game.raft[0]
+    for actor in game.actors:
+        mesh = actor.profession[0]
+        c = actor.cam
         at = ALLEGRO_TRANSFORM()
         al_build_camera_transform(at,
             0, 0, 0,
