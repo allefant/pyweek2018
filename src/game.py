@@ -19,7 +19,8 @@ class Game:
 
         self.font = al_load_font(self.path + "/data/JosefinSans-Regular.ttf", -12, 0)
 
-        self.river = mesh.read_frames(open(self.path + "/data/river.mesh", "rb"))
+        self.raft = mesh.read_frames(self.path + "/data/raft.mesh")
+        self.river = mesh.read_frames(self.path + "/data/perlin.mesh.gz")
 
         self.zoom = 0
         self.camera = camera.Camera()

@@ -3,6 +3,7 @@ from ctypes import Structure
 from ctypes import c_float
 import vector; Vector = vector.Vector
 import math
+from camera import Camera
 
 class VERTEX(Structure):
     _fields_ = [
@@ -105,6 +106,37 @@ def render_scene(game):
     al_use_shader(_render.actor_shader)
 
     render_mesh(game.river[0])
+    render_mesh(game.river[1])
+    render_mesh(game.river[2])
+    render_mesh(game.river[3])
+
+    raft = Camera()
+    raft.shift(64, 64)
+    for c in [raft]:
+        mesh = game.raft[0]
+        at = ALLEGRO_TRANSFORM()
+        al_build_camera_transform(at,
+            0, 0, 0,
+            -c.z.x, -c.z.y, -c.z.z,
+            c.y.x, c.y.y, c.y.z)
+
+        it = ALLEGRO_TRANSFORM()
+        al_identity_transform(it)
+        for i in range(3):
+            for j in range(3):
+                it.m[i][j] = at.m[j][i]
+        
+        al_translate_transform_3d(at, c.p.x, c.p.y, c.p.z)
+
+        t = byref(ALLEGRO_TRANSFORM())
+        al_identity_transform(t)
+        s = 2.5
+        al_scale_transform_3d(t, s, s, s)
+        al_compose_transform(t, at)
+        al_compose_transform(t, ct)
+
+        al_use_transform(t)
+        render_mesh(mesh)
 
     al_use_shader(None)
     al_use_projection_transform(_render.default_projection)

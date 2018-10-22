@@ -1,5 +1,6 @@
 import struct
 from allegro import *
+import gzip
 
 class MeshMarker:
     pass
@@ -34,7 +35,11 @@ def _read_string(f) -> str:
     n = _read_int(f)
     return f.read(n).decode("utf8")
 
-def read_frames(f) -> list:
+def read_frames(name) -> list:
+    if name.endswith(".gz"):
+        f = gzip.open(name, "rb")
+    else:
+        f = open(name, "rb")
     frames = []
     n = _read_int(f)
     for i in range(n):
