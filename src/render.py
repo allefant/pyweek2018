@@ -22,6 +22,8 @@ class Render:
     def __init__(self):
         self.inited = False
 
+        self.light_direction = Vector(1, 0, 1).normalize()
+
         t = byref(ALLEGRO_TRANSFORM())
         al_identity_transform(t)
         al_orthographic_transform(t, 0, 0, -1.0, 1280, 720, 1)
@@ -53,8 +55,11 @@ attribute vec4 al_pos;
 attribute vec4 al_color;
 attribute vec3 al_user_attr_0;
 uniform mat4 al_projview_matrix;
+uniform vec3 light_direction;
 varying vec4 color;
+varying float light;
 void main() {
+  light = dot(al_user_attr_0, light_direction);
   color = al_color;
   gl_Position = al_projview_matrix * al_pos;
 }
@@ -62,8 +67,13 @@ void main() {
         self.check_log("Vertex Shader")
         al_attach_shader_source(self.actor_shader, ALLEGRO_PIXEL_SHADER, """
 varying vec4 color;
+varying float light;
 void main() {
-  gl_FragColor = color;
+  vec4 c = color;
+  float l = light;
+  if (l > 0.0) l *= 2.0;
+  l = (1.0 + light) / 2.0;
+  gl_FragColor = vec4(c.xyz * l, c.w);
 }
         """)
         self.check_log("Pixel Shader")
@@ -88,10 +98,10 @@ def render_scene(game):
     if not _render.inited: _render.init()
     camera = game.camera
    
-    p = byref(ALLEGRO_TRANSFORM())
-    al_identity_transform(p)
-    al_orthographic_transform(p, -64, 36, -200.0, 64, -36, 200)
-    al_use_projection_transform(p)
+    pt = ALLEGRO_TRANSFORM()
+    al_identity_transform(pt)
+    al_orthographic_transform(pt, -64, 36, -200.0, 64, -36, 200)
+    al_use_projection_transform(pt)
 
     ct = byref(ALLEGRO_TRANSFORM())
     al_build_camera_transform(ct,
@@ -101,6 +111,10 @@ def render_scene(game):
     z = 2 ** game.zoom
     al_scale_transform_3d(ct, z, z, z)
     al_use_transform(ct)
+
+    l = _render.light_direction
+    f = (c_float * 3)(l.x, l.y, l.z)
+    al_set_shader_float_vector("light_direction", 3, f, 1)
 
     al_set_render_state(ALLEGRO_DEPTH_TEST, 1)
     al_use_shader(_render.actor_shader)
@@ -115,7 +129,11 @@ def render_scene(game):
     render_mesh(game.river[7])
 
     for actor in game.actors:
-        mesh = actor.profession[0]
+        frame = actor.frame_t + (game.t // 4)
+        frame %= 8
+        if frame > 4: frame = -frame + 5 + 3
+        mesh = actor.profession[frame]
+
         c = actor.cam
         at = ALLEGRO_TRANSFORM()
         al_build_camera_transform(at,
@@ -128,6 +146,11 @@ def render_scene(game):
         for i in range(3):
             for j in range(3):
                 it.m[i][j] = at.m[j][i]
+
+        l = _render.light_direction
+        f = (c_float * 3)(l.x, l.y, l.z)
+        al_transform_coordinates_3d(it, byref(f, 0), byref(f, 4), byref(f, 8))
+        al_set_shader_float_vector("light_direction", 3, f, 1)
         
         al_translate_transform_3d(at, c.p.x, c.p.y, c.p.z)
 
@@ -140,6 +163,12 @@ def render_scene(game):
 
         al_use_transform(t)
         render_mesh(mesh)
+
+        p = (c_float * 3)(0, 0, 0)
+        al_transform_coordinates_3d(t, byref(p, 0), byref(p, 4), byref(p, 8))
+        al_transform_coordinates_3d_projective(pt, byref(p, 0), byref(p, 4), byref(p, 8))
+        actor.xos = 640 + p[0] * 640
+        actor.yos = 360 - p[1] * 360
 
     al_use_shader(None)
     al_use_projection_transform(_render.default_projection)

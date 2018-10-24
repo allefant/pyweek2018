@@ -4,10 +4,15 @@ import random
 import game
 import math
 
+FLOWING = 0
+FALLING = 1
+
 class Actors:
     def __init__(self):
         self.actors = []
         self.grid = []
+        self.xos = 0
+        self.yos = 0
         for i in range(32 * 32):
             self.grid.append([])
 
@@ -65,11 +70,13 @@ class Actor:
     def __init__(self, profession, x, y):
         self.profession = profession
         self.cam = camera.Camera()
+        self.cam.rotate(vector.z, math.pi / 2)
         z = game.get().landscape.get_height_interpolated(x, y)
         self.cam.p += (x, y, z)
         self.frame_t = random.randint(0, 7)
         self.v = vector.o
         self.t = 0
+        self.state = FLOWING
 
     def collides(self, c):
         if c is self: return False
@@ -84,10 +91,17 @@ class Actor:
     def tick(self, actors):
         g = game.get()
 
-        self.v = self.v + (0.02, 0, -0.1)
+        if self.state == FALLING:
+            self.v *= 0.98
+            self.v += (0.33, 0, -1)
+            self.cam.p = self.cam.p + self.v * 0.01
+            return
+
+        self.v *= 0.98
+        self.v = self.v + (0.2, 0, -0.3)
 
         cell1 = actors.get_cell(self)
-        self.cam.p = self.cam.p + self.v * 0.05
+        self.cam.p = self.cam.p + self.v * 0.01
 
         for c in actors.get_colliders(self):
             d = self.cam.p - c.cam.p
@@ -96,7 +110,8 @@ class Actor:
             response = 2 * (self.v * n) * n
             self.v -= response / 2
             c.v += response / 2
-        
+
+        friction = 0.93
         zg = g.landscape.get_height_interpolated(self.cam.p.x, self.cam.p.y)
         if self.cam.p.z < zg:
             amount = zg - self.cam.p.z
@@ -113,24 +128,28 @@ class Actor:
             # v' = v - 2 * (v . n) * n
             n = g.landscape.get_normal(self.cam.p.x, self.cam.p.y)
             self.v = self.v - 2 * (self.v * n) * n
-            self.v *= 0.98
+            self.v *= friction
+            self.v += (0.3, 0, 0)
 
-        if self.cam.p.x < 0:
-            self.v = self.v - 2 * (self.v * vector.x) * vector.x
-            self.cam.p.x = 0
-            self.v *= 0.98
-        if self.cam.p.x > 128 * 8:
-            self.v = self.v - 2 * (self.v * -vector.x) * -vector.x
-            self.cam.p.x = 128 * 8
-            self.v *= 0.98
-        if self.cam.p.y < 0:
-            self.v = self.v - 2 * (self.v * vector.y) * vector.y
-            self.cam.p.y = 0
-            self.v *= 0.98
-        if self.cam.p.y > 128:
-            self.v = self.v - 2 * (self.v * -vector.y) * -vector.y
-            self.cam.p.y = 128
-            self.v *= 0.98
+        # if self.cam.p.x < 0:
+            # self.v = self.v - 2 * (self.v * vector.x) * vector.x
+            # self.cam.p.x = 0
+            # self.v *= friction
+        # if self.cam.p.x > 128 * 8:
+            # self.v = self.v - 2 * (self.v * -vector.x) * -vector.x
+            # self.cam.p.x = 128 * 8
+            # self.v *= friction
+        # if self.cam.p.y < 0:
+            # self.v = self.v - 2 * (self.v * vector.y) * vector.y
+            # self.cam.p.y = 0
+            # self.v *= friction
+        # if self.cam.p.y > 128:
+            # self.v = self.v - 2 * (self.v * -vector.y) * -vector.y
+            # self.cam.p.y = 128
+            # self.v *= friction
+
+        if self.cam.p.x < 0 or self.cam.p.y < 0 or self.cam.p.y > 128:
+            self.state = FALLING
 
         cell2 = actors.get_cell(self)
         if cell2 != cell1:

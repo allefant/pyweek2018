@@ -16,15 +16,6 @@ class Camera:
         self.y = self.y.rotate(axis, angle)
         self.z = self.z.rotate(axis, angle)
 
-    def change_locked_constrained(self, x, z, min_x, max_x):
-        angle = math.atan2(self.y.z, math.sqrt(self.y.x ** 2 + self.y.y ** 2))
-
-        if angle + x < min_x: x = min_x - angle
-        if angle + x > max_x: x = max_x - angle
-
-        self.rotate(self.x, x)
-        self.rotate(vector.z, z)
-
     def center_on(self, x, y):
         self.p = vector.Vector(x, y, 0)
 

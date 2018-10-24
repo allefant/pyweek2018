@@ -8,6 +8,7 @@ import random
 import actor
 import landscape
 import vector
+from math import pi
 
 _game = None
 def get():
@@ -42,15 +43,19 @@ class Game:
 
         self.actors = actor.Actors()
 
+        self.picked = None
+
         for i in range(10):
-            x = random.uniform(0, 128)
-            y = random.uniform(0, 128)
+            x = random.uniform(16, 48)
+            y = random.uniform(32, 128 - 32)
             self.actors.new(self.raft, x, y)
 
     def rotate_camera(self, amount):
         self.rotation += amount
+        if self.rotation < 0: self.rotation = 0
+        if self.rotation > pi: self.rotation = pi
         self.camera.unrotate()
-        self.camera.rotate(vector.x, 1.125 * math.pi)
+        self.camera.rotate(vector.x, 1.3 * math.pi)
         self.camera.rotate(vector.z, self.rotation)
         self.camera.rotate(vector.y, 0.125 * math.pi)
 
@@ -63,6 +68,10 @@ class Game:
         al_clear_depth_buffer(1)
 
         render.render_scene(self)
+
+        #for a in self.actors:
+        #    al_draw_text(self.font, al_map_rgb_f(1, 1, 1), a.xos, a.yos,
+        #        0, "X")
 
         self.draw_fps()
         
@@ -77,25 +86,66 @@ class Game:
         self.fps[0] += 1
 
         al_draw_text(self.font, al_map_rgb_f(0, 0, 0), 0, 0, 0,
-            "fps %.1f %.1f" % (self.fps[1], sum(self.fps[1:]) / 5))
+            "fps %.1f %.1f, %.1f" % (self.fps[1], sum(self.fps[1:]) / 5,
+                self.zoom))
 
     def tick(self):
         if self.input.mouse_button(1):
             pass
 
+        mx = self.input.mx
+        my = self.input.my
+
         if self.input.mouse_button(2):
-            dx = self.input.mx.d * -0.005
-            dy = self.input.my.d * -0.5
+            dx = mx.d * -0.005
+            dy = my.d * -0.5
             self.rotate_camera(dx)
 
-        self.scroll_camera(0.1)
-
+            self.scroll_camera(dy)
         if self.input.mz.d:
             self.zoom -= self.input.mz.d * 0.1
-            if self.zoom < -2: self.zoom = -2
-            if self.zoom > 2: self.zoom = 2
+            if self.zoom < -1: self.zoom = -1
+            if self.zoom > 1: self.zoom = 1
+
+        if self.picked:
+            picked, px, py, sx, sy = self.picked
+            c = self.camera
+            ct = ALLEGRO_TRANSFORM()
+            al_build_camera_transform(ct,
+                0, 0, 0,
+                0 - c.z.x, 0 - c.z.y, 0 - c.z.z,
+                c.y.x, c.y.y, c.y.z)
+            it = ALLEGRO_TRANSFORM()
+            al_identity_transform(it)
+            for i in range(3):
+                for j in range(3):
+                    it.m[i][j] = ct.m[j][i]
+            x = mx.v - picked.xos + sx - px
+            y = my.v - picked.yos + sy - py
+            f = (c_float * 3)(x, -y, 0)
+            al_transform_coordinates_3d(it, byref(f, 0), byref(f, 4), byref(f, 8))
+            d = vector.Vector(f[0], f[1], 0)
+            if d.length() > 0.5:
+                d = d / d.length() * 0.5
+            picked.v += d
+
+        closest = None
 
         for a in self.actors:
             a.tick(self.actors)
 
+            dx = a.xos - mx.v
+            dy = a.yos - my.v
+            d = dx * dx + dy * dy
+            if closest is None or d < closest[0]:
+                closest = d, a
+
+        if self.input.key_released.get(ALLEGRO_KEY_BUTTON_A, False):
+            self.picked = None
+
+        if self.input.key_pressed.get(ALLEGRO_KEY_BUTTON_A, False) and closest:
+            if closest[0] < 20 * 20:
+                self.picked = closest[1], mx.v, my.v, closest[1].xos, closest[1].yos
+
         self.t += 1
+

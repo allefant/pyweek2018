@@ -22,8 +22,9 @@ class Landscape:
       10 8        7 5
         """
         f = (x >> 7) & 7
+        if y < 0: y = 0
+        if y > 127: y = 127
         x &= 127
-        y &= 127
         frame = self.frames[f]
         o = 12 * (x + 128 * y) + i
         return struct.unpack("fff", frame.v[o * 11 * 4 + 0:o * 11 * 4 + 12])
