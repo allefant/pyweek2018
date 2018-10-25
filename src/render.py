@@ -94,15 +94,14 @@ def render_mesh(mesh):
     vbuffer = mesh.vertex_buffer(_render)
     al_draw_vertex_buffer(vbuffer, None, 0, mesh.n, ALLEGRO_PRIM_TRIANGLE_LIST)
 
-def render_scene(game):
-    if not _render.inited: _render.init()
-    camera = game.camera
-   
+def render_projection_transform():
     pt = ALLEGRO_TRANSFORM()
     al_identity_transform(pt)
     al_orthographic_transform(pt, -64, 36, -200.0, 64, -36, 200)
-    al_use_projection_transform(pt)
+    return pt
 
+def render_camera_transform(game):
+    camera = game.camera
     ct = byref(ALLEGRO_TRANSFORM())
     al_build_camera_transform(ct,
         camera.p.x, camera.p.y, camera.p.z,
@@ -110,14 +109,39 @@ def render_scene(game):
         camera.y.x, camera.y.y, camera.y.z)
     z = 2 ** game.zoom
     al_scale_transform_3d(ct, z, z, z)
+    return ct
+
+def render_actor_transform(actor):
+    c = actor.cam
+    at = ALLEGRO_TRANSFORM()
+    al_identity_transform(at)
+    at.m[0][0] = c.x.x
+    at.m[0][1] = c.y.x
+    at.m[0][2] = c.z.x
+    at.m[1][0] = c.x.y
+    at.m[1][1] = c.y.y
+    at.m[1][2] = c.z.y
+    at.m[2][0] = c.x.z
+    at.m[2][1] = c.y.z
+    at.m[2][2] = c.z.z
+    return at
+
+def render_scene(game):
+    if not _render.inited: _render.init()
+    camera = game.camera
+   
+    pt = render_projection_transform()
+    al_use_projection_transform(pt)
+
+    ct = render_camera_transform(game)
     al_use_transform(ct)
+
+    al_set_render_state(ALLEGRO_DEPTH_TEST, 1)
+    al_use_shader(_render.actor_shader)
 
     l = _render.light_direction
     f = (c_float * 3)(l.x, l.y, l.z)
     al_set_shader_float_vector("light_direction", 3, f, 1)
-
-    al_set_render_state(ALLEGRO_DEPTH_TEST, 1)
-    al_use_shader(_render.actor_shader)
 
     render_mesh(game.river[0])
     render_mesh(game.river[1])
@@ -135,11 +159,7 @@ def render_scene(game):
         mesh = actor.profession[frame]
 
         c = actor.cam
-        at = ALLEGRO_TRANSFORM()
-        al_build_camera_transform(at,
-            0, 0, 0,
-            -c.z.x, -c.z.y, -c.z.z,
-            c.y.x, c.y.y, c.y.z)
+        at = render_actor_transform(actor)
 
         it = ALLEGRO_TRANSFORM()
         al_identity_transform(it)
@@ -156,7 +176,7 @@ def render_scene(game):
 
         t = byref(ALLEGRO_TRANSFORM())
         al_identity_transform(t)
-        s = 2.5
+        s = actor.scale
         al_scale_transform_3d(t, s, s, s)
         al_compose_transform(t, at)
         al_compose_transform(t, ct)

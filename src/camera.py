@@ -14,7 +14,7 @@ class Camera:
     def rotate(self, axis, angle):
         self.x = self.x.rotate(axis, angle)
         self.y = self.y.rotate(axis, angle)
-        self.z = self.z.rotate(axis, angle)
+        self.z = self.x.cross(self.y)
 
     def center_on(self, x, y):
         self.p = vector.Vector(x, y, 0)
@@ -25,3 +25,7 @@ class Camera:
         yv = yv * (1 + math.sin(abs(self.y.z)))
         self.p += xv * x
         self.p += yv * y
+
+    def get_heading(self):
+        return math.atan2(self.y.x, self.y.y)
+

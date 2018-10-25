@@ -26,6 +26,7 @@ class Game:
 
         self.raft = mesh.read_frames(self.path + "/data/raft.mesh")
         self.river = mesh.read_frames(self.path + "/data/perlin.mesh.gz")
+        self.dragon = mesh.read_frames(self.path + "/data/dragon.mesh")
 
         self.zoom = 0
         self.rotation = 0
@@ -45,10 +46,13 @@ class Game:
 
         self.picked = None
 
-        for i in range(10):
-            x = random.uniform(16, 48)
-            y = random.uniform(32, 128 - 32)
+        for i in range(7):
+            x = 16
+            y = 64
             self.actors.new(self.raft, x, y)
+
+        self.actors.new(self.dragon, -100, 64, flying = True,
+            scale = 5, z = 20)
 
     def rotate_camera(self, amount):
         self.rotation += amount
@@ -69,9 +73,34 @@ class Game:
 
         render.render_scene(self)
 
-        #for a in self.actors:
-        #    al_draw_text(self.font, al_map_rgb_f(1, 1, 1), a.xos, a.yos,
-        #        0, "X")
+        pt = render.render_projection_transform()
+        ct = render.render_camera_transform(self)
+
+        for a in self.actors:
+            
+            t = byref(ALLEGRO_TRANSFORM())
+            al_identity_transform(t)
+            al_compose_transform(t, ct)
+
+            p = (c_float * 3)(a.cam.p.x, a.cam.p.y, a.cam.p.z)
+            al_transform_coordinates_3d(t, byref(p, 0), byref(p, 4), byref(p, 8))
+            al_transform_coordinates_3d_projective(pt, byref(p, 0), byref(p, 4), byref(p, 8))
+            xos0 = 640 + p[0] * 640
+            yos0 = 360 - p[1] * 360
+
+            n = a.ground_normal
+            s = 10
+            p = (c_float * 3)(a.cam.p.x - n.x * s, a.cam.p.y - n.y * s, a.cam.p.z - n.z * s)
+            al_transform_coordinates_3d(t, byref(p, 0), byref(p, 4), byref(p, 8))
+            al_transform_coordinates_3d_projective(pt, byref(p, 0), byref(p, 4), byref(p, 8))
+            xos = 640 + p[0] * 640
+            yos = 360 - p[1] * 360
+
+            al_draw_line(xos0, yos0, xos, yos, al_map_rgb_f(1, 0, 0), 1)
+            al_draw_line(a.xos, a.yos, a.xos, a.yos - 100, al_map_rgb_f(0, 0, 1), 1)
+            
+            al_draw_text(self.font, al_map_rgb_f(1, 1, 1), a.xos, a.yos,
+                0, "%.1f" % (a.cam.get_heading()))
 
         self.draw_fps()
         
@@ -144,7 +173,7 @@ class Game:
             self.picked = None
 
         if self.input.key_pressed.get(ALLEGRO_KEY_BUTTON_A, False) and closest:
-            if closest[0] < 20 * 20:
+            if closest[0] < 40 * 40:
                 self.picked = closest[1], mx.v, my.v, closest[1].xos, closest[1].yos
 
         self.t += 1

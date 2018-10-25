@@ -73,6 +73,9 @@ class Vector:
 
         return Vector(v * r, v * u, v * b)
 
+    def __str__(self):
+        return "%.1f/%.1f/%.1F" % (self.x, self.y, self.z)
+
 o = Vector(0, 0, 0)
 x = Vector(1, 0, 0)
 y = Vector(0, 1, 0)

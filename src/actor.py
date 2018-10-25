@@ -3,6 +3,7 @@ import vector
 import random
 import game
 import math
+from math import pi
 
 FLOWING = 0
 FALLING = 1
@@ -16,10 +17,14 @@ class Actors:
         for i in range(32 * 32):
             self.grid.append([])
 
-    def new(self, profession, x, y):
+    def new(self, profession, x, y, **params):
         a = Actor(profession, x, y)
         self.actors.append(a)
         self.grid_place(a)
+        for key, val in params.items():
+            if key == "flying": a.flying = val
+            if key == "scale": a.scale = val
+            if key == "z": a.cam.p.z = val
         return a
 
     def __iter__(self):
@@ -52,13 +57,14 @@ class Actors:
         self.grid[cell2].append(a)
 
     def get_colliders(self, a):
-        cell1 = self.get_cell_at(a.cam.p.x - 1, a.cam.p.y - 1)
+        r = 2
+        cell1 = self.get_cell_at(a.cam.p.x - r, a.cam.p.y - r)
         cells = [cell1]
-        cell2 = self.get_cell_at(a.cam.p.x + 1, a.cam.p.y - 1)
+        cell2 = self.get_cell_at(a.cam.p.x + r, a.cam.p.y - r)
         if cell2 != cell1: cells += [cell2]
-        cell3 = self.get_cell_at(a.cam.p.x - 1, a.cam.p.y + 1)
+        cell3 = self.get_cell_at(a.cam.p.x - r, a.cam.p.y + r)
         if cell3 != cell1: cells += [cell3]
-        cell4 = self.get_cell_at(a.cam.p.x + 1, a.cam.p.y + 1)
+        cell4 = self.get_cell_at(a.cam.p.x + r, a.cam.p.y + r)
         if cell4 != cell2 and cell4 != cell3: cells += [cell4]
 
         for x in cells:
@@ -70,18 +76,22 @@ class Actor:
     def __init__(self, profession, x, y):
         self.profession = profession
         self.cam = camera.Camera()
-        self.cam.rotate(vector.z, math.pi / 2)
         z = game.get().landscape.get_height_interpolated(x, y)
         self.cam.p += (x, y, z)
         self.frame_t = random.randint(0, 7)
         self.v = vector.o
         self.t = 0
         self.state = FLOWING
+        self.flying = False
+        self.scale = 2.5
+
+        self.ground_normal = vector.z
 
     def collides(self, c):
+        r = 2
         if c is self: return False
         d = self.cam.p - c.cam.p
-        if d.length() < 1 + 1:
+        if d * d < (r + r) * (r + r):
             return True
         return False
         
@@ -98,7 +108,10 @@ class Actor:
             return
 
         self.v *= 0.98
-        self.v = self.v + (0.2, 0, -0.3)
+        if self.flying:
+            self.v = self.v + (0.15, 0, 0)
+        else:
+            self.v = self.v + (0.2, 0, -0.3)
 
         cell1 = actors.get_cell(self)
         self.cam.p = self.cam.p + self.v * 0.01
@@ -106,7 +119,8 @@ class Actor:
         for c in actors.get_colliders(self):
             d = self.cam.p - c.cam.p
             n = d.normalize()
-            self.cam.p += n * (2 - d.length())
+            r = 2
+            self.cam.p += n * (r + r - d.length())
             response = 2 * (self.v * n) * n
             self.v -= response / 2
             c.v += response / 2
@@ -131,6 +145,8 @@ class Actor:
             self.v *= friction
             self.v += (0.3, 0, 0)
 
+            self.ground_normal = n
+
         # if self.cam.p.x < 0:
             # self.v = self.v - 2 * (self.v * vector.x) * vector.x
             # self.cam.p.x = 0
@@ -148,10 +164,17 @@ class Actor:
             # self.cam.p.y = 128
             # self.v *= friction
 
-        if self.cam.p.x < 0 or self.cam.p.y < 0 or self.cam.p.y > 128:
-            self.state = FALLING
+        if not self.flying:
+            if self.cam.p.x < 0 or self.cam.p.y < 0 or self.cam.p.y > 128:
+                self.state = FALLING
+
+        d = math.atan2(self.v.x, self.v.y) + self.cam.get_heading() 
+        if d < -pi: d += pi * 2
+        if d > pi: d -= pi * 2
+        step = math.pi / 300
+        if d < -step: self.cam.rotate(vector.z, -step)
+        if d > step: self.cam.rotate(vector.z, step)
 
         cell2 = actors.get_cell(self)
         if cell2 != cell1:
             actors.move(cell1, cell2, self)
-    
