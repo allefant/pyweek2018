@@ -29,3 +29,6 @@ class Camera:
     def get_heading(self):
         return math.atan2(self.y.x, self.y.y)
 
+    def get_down(self):
+        return math.asin(self.y.z)
+

@@ -6,8 +6,8 @@ from vector import Vector
 from timeit import default_timer as tit
 
 class Landscape:
-    def __init__(self, w, frames):
-        self.w = w
+    def __init__(self, frames):
+        self.w = 128 * len(frames)
         self.frames = frames
 
     def get_mesh_vertex(self, x : int, y : int, i):
@@ -21,7 +21,7 @@ class Landscape:
         |/________\|
       10 8        7 5
         """
-        f = (x >> 7) & 7
+        f = (x >> 7) % len(self.frames)
         if y < 0: y = 0
         if y > 127: y = 127
         x &= 127

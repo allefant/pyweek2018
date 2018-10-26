@@ -18,7 +18,7 @@ def main():
     al_install_keyboard()
     al_install_mouse()
     al_init_primitives_addon()
-    al_set_new_window_title("Flow by Allefant - PyWeek 2018/10")
+    al_set_new_window_title("Snow Hill by Allefant - PyWeek 2018/10")
     al_set_new_display_flags(ALLEGRO_WINDOWED | ALLEGRO_RESIZABLE |
         ALLEGRO_OPENGL | ALLEGRO_PROGRAMMABLE_PIPELINE)
     al_set_new_display_option(ALLEGRO_DEPTH_SIZE, 16, ALLEGRO_SUGGEST)
@@ -78,6 +78,10 @@ def main():
 
         if event.type == ALLEGRO_EVENT_KEY_UP:
             _game.input.add_key_up(event.keyboard.keycode)
+
+        if event.type == ALLEGRO_EVENT_DISPLAY_RESIZE:
+            al_acknowledge_resize(display)
+            _game.resize(al_get_display_width(display), al_get_display_height(display))
 
 if __name__ == "__main__":
     al_main(main)

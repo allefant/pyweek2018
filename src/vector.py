@@ -44,7 +44,9 @@ class Vector:
     def length(v): return math.sqrt(v * v)
     def normalize(v):
         l = v.length()
-        return Vector(v.x / l, v.y / l, v.z / l)
+        if l > 0.0001:
+            return Vector(v.x / l, v.y / l, v.z / l)
+        return v
 
     def rotate(v, a, angle):
         """
@@ -74,7 +76,7 @@ class Vector:
         return Vector(v * r, v * u, v * b)
 
     def __str__(self):
-        return "%.1f/%.1f/%.1F" % (self.x, self.y, self.z)
+        return "%.2f/%.2f/%.2f" % (self.x, self.y, self.z)
 
 o = Vector(0, 0, 0)
 x = Vector(1, 0, 0)
