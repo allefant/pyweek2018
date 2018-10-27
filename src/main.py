@@ -5,6 +5,8 @@ import sys
 import game
 
 path = os.getcwd()
+if not os.path.exists(path + "/data"):
+    path += "/.."
 
 def main():
     #al_install_system(ALLEGRO_VERSION_INT, None)

@@ -32,6 +32,9 @@ class Game:
         self.input = controls.Input()
 
         self.font = al_load_font(self.path + "/data/JosefinSans-Regular.ttf", -12, 0)
+        if not self.font:
+            print("Cannot find data")
+            sys.exit(1)
         self.font_big = al_load_font(self.path + "/data/JosefinSans-Regular.ttf", -48, 0)
 
         colors = ["red", "green", "blue", "black", "white", "yellow", "purple"]

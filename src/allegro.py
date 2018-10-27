@@ -17,7 +17,11 @@ def _add_dll(name):
     # Under Windows, DLLs are found in the current directory, so this
     # would be an easy way to keep all your DLLs in a sub-folder.
 
-    os.chdir("dll")
+    # pyinstaller doesn't like it
+    cd = False
+    if os.path.exists("dll"):
+        os.chdir("dll")
+        cd = True
 
     if os.name == "mac":
         path = name + ".dylib"
@@ -48,7 +52,8 @@ def _add_dll(name):
         # No need to fail here, might just be one of the addons.
         pass
 
-    os.chdir("..")
+    if cd:
+        os.chdir("..")
 
 _add_dll("allegro")
 _add_dll("allegro_acodec")
