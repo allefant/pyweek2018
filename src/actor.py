@@ -4,15 +4,18 @@ import random
 import game
 import math
 from math import pi
+import audio
 
 FLOWING = 0
 FALLING = 1
 DIVING = 2
 EATEN = 3
 GONE = 4
+WON = 5
 
 class Actors:
-    def __init__(self):
+    def __init__(self, landscape):
+        self.landscape = landscape
         self.actors = []
         self.grid = []
         self.xos = 0
@@ -21,7 +24,7 @@ class Actors:
             self.grid.append([])
 
     def new(self, profession, x, y, **params):
-        a = Actor(profession, x, y)
+        a = Actor(profession, x, y, self.landscape)
         a.static = False
         self.grid_place(a)
         for key, val in params.items():
@@ -80,10 +83,10 @@ class Actors:
                     yield c
 
 class Actor:
-    def __init__(self, profession, x, y):
+    def __init__(self, profession, x, y, landscape):
         self.profession = profession
         self.cam = camera.Camera()
-        z = game.get().landscape.get_height_interpolated(x, y)
+        z = landscape.get_height_interpolated(x, y)
         self.cam.p += (x, y, z)
         self.frame_t = random.randint(0, 7)
         self.v = vector.o
@@ -99,6 +102,7 @@ class Actor:
         self.swoosh_t = 0
         self.xos = 0
         self.yos = 0
+        self.gray = 0
 
         self.ground_normal = vector.z
 
@@ -130,6 +134,7 @@ class Actor:
             self.cam.p = g.dragon.cam.p - g.dragon.cam.y * 10
             if g.t > self.t:
                 self.state = FALLING
+                audio.play(g.yelp)
             
         elif self.state == DIVING:
             mouthpos = self.cam.p - self.cam.y * 10
@@ -146,7 +151,16 @@ class Actor:
                     self.target.state = EATEN
                     self.target.t = g.t + 120
                     self.target = None
+                    audio.play(g.roar)
+                    self.gray = 1
 
+        elif self.state == WON:
+            self.v *= 0.98
+            if self.cam.p.z < 20:
+                self.v += (0, 0, 0.2)
+            self.cam.p = self.cam.p + self.v * 0.01
+            self.collide_with_objects(actors)
+            self.cam.p.x = g.landscape.w - 1
         else:
             self.v *= 0.98 if self.cam.p.z > -15 else 1.0
             if self.flying:
@@ -164,7 +178,7 @@ class Actor:
                         self.state = DIVING
                     else:
                         v = v.normalize()
-                        self.v = self.v + (v.x * 0.2, v.y * 0.2)
+                        self.v = self.v + (v.x * 0.22, v.y * 0.22)
                 else:
                     self.v = self.v + (0.15, 0, 0)
             else:
@@ -175,14 +189,7 @@ class Actor:
 
             self.cam.p = self.cam.p + self.v * 0.01
 
-            for c in actors.get_colliders(self):
-                d = self.cam.p - c.cam.p
-                n = d.normalize()
-                r = self.radius + c.radius
-                self.cam.p += n * (r - d.length())
-                response = 2 * (self.v * n) * n
-                self.v -= response / 2
-                c.v += response / 2
+            self.collide_with_objects(actors)
 
             friction = 0.93 if self.cam.p.z > -15 else 1.0
             zg = g.landscape.get_height_interpolated(self.cam.p.x, self.cam.p.y)
@@ -226,6 +233,14 @@ class Actor:
             if not self.flying:
                 if self.cam.p.x < 0 or self.cam.p.y < 0 or self.cam.p.y > 128:
                     self.state = FALLING
+                    audio.play(g.yelp)
+                    self.t = g.t
+                    self.gray = 1
+
+                if self.cam.p.x > g.landscape.w:
+                    self.cam.p.x = g.landscape.w - 1
+                    self.state = WON
+                    audio.play(g.jingle)
                     self.t = g.t
 
         d = self.cam.get_heading() - math.atan2(self.v.x, self.v.y)
@@ -238,3 +253,13 @@ class Actor:
         cell2 = actors.get_cell(self)
         if cell2 != cell1:
             actors.move(cell1, cell2, self)
+            
+    def collide_with_objects(self, actors):
+        for c in actors.get_colliders(self):
+            d = self.cam.p - c.cam.p
+            n = d.normalize()
+            r = self.radius + c.radius
+            self.cam.p += n * (r - d.length())
+            response = 2 * (self.v * n) * n
+            self.v -= response / 2
+            c.v += response / 2

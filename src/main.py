@@ -18,6 +18,10 @@ def main():
     al_install_keyboard()
     al_install_mouse()
     al_init_primitives_addon()
+    al_install_audio()
+    al_init_acodec_addon()
+    al_reserve_samples(20)
+    al_set_mixer_gain(al_get_default_mixer(), 2)
     al_set_new_window_title("Snow Hill by Allefant - PyWeek 2018/10")
     al_set_new_display_flags(ALLEGRO_WINDOWED | ALLEGRO_RESIZABLE |
         ALLEGRO_OPENGL | ALLEGRO_PROGRAMMABLE_PIPELINE)

@@ -11,24 +11,12 @@ import vector
 from math import pi
 from vector import Vector
 import json
+import title
+import audio
 
 _game = None
 def get():
     return _game
-
-intro = """
-Seven mages went for a boat ride.
-
-Green mage: "Let me cast a nature spell so trees are growing from the ground and we can use the wood for rafts."
-White mage: "I don't need a raft I can just flow down the river if I turn it to ice."
-Red mage: "No way I'll melt away your ice - or paint some of it red at least."
-Yellow mage: "Why don't we just ride on elephants? I'll summon some. And they are yellow!"
-Purple mage: "I've had enough, I'll call upon my dragon to fly me home now."
-Black mage: "Ahhh! I see a dragon! I'll put a curse on it - wait, I think that made it angry."
-Blue mage: "I can cast a wind spell to safely guide us down! Let's ride!"
-
-Drag with the left mouse button to control the blue mage's wind spell and make all seven wizards flow down the snowy hill to safety!
-"""
 
 class Game:
     def __init__(self, path):
@@ -36,16 +24,28 @@ class Game:
         global _game
         _game = self
 
+        self.show_title(True)
+
         self.input = controls.Input()
 
         self.font = al_load_font(self.path + "/data/JosefinSans-Regular.ttf", -12, 0)
+        self.font_big = al_load_font(self.path + "/data/JosefinSans-Regular.ttf", -48, 0)
 
+        colors = ["red", "green", "blue", "black", "white", "yellow", "purple"]
+        self.mage_p = []
         self.raft_p = []
         for i in range(7):
             self.raft_p.append(mesh.read_frames(self.path + "/data/raft%d.mesh.gz" % (1 + i)))
+            self.mage_p.append(mesh.read_frames(self.path + "/data/%s mage_fire_outfit.mesh.gz" % colors[i]))
         self.river = mesh.read_frames(self.path + "/data/perlin.mesh.gz")
         self.dragon_p = mesh.read_frames(self.path + "/data/dragon.mesh.gz")
         self.pine_p = mesh.read_frames(self.path + "/data/pine.mesh.gz")
+
+        self.roar = audio.load(self.path + "/data/wumpus dines.ogg")
+        self.swoosh = audio.load(self.path + "/data/swoosh.ogg")
+        self.yelp = audio.load(self.path + "/data/yelp.ogg")
+        self.jingle = audio.load(self.path + "/data/jingle.ogg")
+        self.rubber = audio.load(self.path + "/data/rubber.ogg")
 
         self.zoom = 0
         self.rotation = pi / 4
@@ -53,6 +53,8 @@ class Game:
         self.camera = camera.Camera()
         self.rotate_camera(0)
         self.paused = False
+        self.title = title.Title()
+        self.silver = al_color_name("silver")
 
         self.t = 0
 
@@ -61,7 +63,7 @@ class Game:
 
         self.landscape = landscape.Landscape(self.river)
 
-        self.actors = actor.Actors()
+        self.actors = actor.Actors(self.landscape)
 
         with open(self.path + "/data/objects.json", "r") as j:
             self.objects = json.load(j)
@@ -73,9 +75,8 @@ class Game:
         self.resize(1280, 720)
 
         self.raft = []
-        colors = ["red", "green", "blue", "black", "white", "yellow", "purple"]
         for i in range(7):
-            x = 16
+            x = 16 #+ 128 * 15
             y = 64
             r = self.actors.new(self.raft_p[i], x, y)
             r.color = al_color_name(colors[i])
@@ -87,6 +88,8 @@ class Game:
         self.scroll_camera(self.scroll)
         self.red = al_color_name("crimson")
 
+        #self.title.ending()
+
     def rotate_camera(self, amount):
         self.rotation += amount
         if self.rotation < 0: self.rotation = 0
@@ -96,10 +99,15 @@ class Game:
         self.camera.rotate(vector.z, self.rotation)
         self.camera.rotate(vector.y, 0.125 * math.pi)
 
+    def get_last(self):
+        for raft in self.raft:
+            if raft.state == actor.FLOWING: return raft
+        return self.raft[-1]
+
     def scroll_camera(self, amount):
         self.scroll += amount
-        last = self.raft[0]
-        first = self.raft[len(self.raft) - 1]
+        last = self.get_last()
+        first = self.raft[-1]
         if self.scroll < last.cam.p.x: self.scroll = last.cam.p.x
         if self.scroll > first.cam.p.x + 64: self.scroll = first.cam.p.x + 64
         self.camera.center_on(self.scroll, 64)
@@ -108,6 +116,15 @@ class Game:
         al_clear_to_color(al_map_rgb_f(0.5, 0.5, 0.5))
         al_clear_depth_buffer(1)
 
+        if self.showing_title:
+            self.title.draw()
+        else:
+            self.draw_in_game()
+
+        self.draw_fps()
+        al_flip_display()
+
+    def draw_in_game(self):
         render.render_scene(self)
 
         pt = render.render_projection_transform()
@@ -140,13 +157,19 @@ class Game:
                 if self.dragon.target is r:
                     if (self.dragon.cam.p - r.cam.p).length() < 50:
                         danger = True
+            if r.state == actor.WON: danger = False
 
             if danger:
                 al_draw_filled_circle(x, y, b, al_premul_rgba_f(
                     r.color.r, r.color.g, r.color.b, 0.5 + math.sin(2 * pi * self.t / 30) / 2))
             else:
                 al_draw_filled_circle(x, y, b, r.color)
-            if gone:
+
+            if r.state == actor.WON:
+                for i in range(5):
+                    al_draw_line(x, y, x + b * math.cos(2 * pi * i / 5),
+                        y + b * math.sin(2 * pi * i / 5), self.silver, 3)
+            elif gone:
                 al_draw_line(x - b, y - b, x + b, y + b, self.red, 3)
                 al_draw_line(x + b, y - b, x - b, y + b, self.red, 3)
 
@@ -159,10 +182,6 @@ class Game:
             p = self.picked[0]
             al_draw_line(p.xos, p.yos,
                 self.input.mx.o, self.input.my.o, p.color, 3)
-
-        self.draw_fps()
-        
-        al_flip_display()
 
     def draw_fps(self):
         if self.t >= self.fps_t + 60:
@@ -197,8 +216,10 @@ class Game:
         return closest
 
     def tick(self):
-        if self.input.mouse_button(1):
-            pass
+
+        if self.showing_title:
+            self.title.tick()
+            return
 
         mx = self.input.mx
         my = self.input.my
@@ -209,6 +230,11 @@ class Game:
             self.rotate_camera(dx)
 
             self.scroll_camera(dy)
+        else:
+            last = self.get_last()
+            if last.cam.p.x > self.scroll - 20:
+                self.scroll_camera(0.1)
+            
         if self.input.mz.d:
             self.zoom -= self.input.mz.d * 0.1
             if self.zoom < -1: self.zoom = -1
@@ -216,6 +242,9 @@ class Game:
 
         if self.input.key_pressed.get(ALLEGRO_KEY_P, False):
             self.paused = not self.paused
+
+        if self.input.key_pressed.get(ALLEGRO_KEY_M, False):
+            audio.toggle()
 
         if self.input.key_pressed.get(ALLEGRO_KEY_T, False):
             c = self.camera
@@ -254,7 +283,7 @@ class Game:
             if d.length() > 0.5:
                 d = d / d.length() * 0.5
             picked.swoosh = d
-            picked.swoosh_t = self.t + 120
+            picked.swoosh_t = self.t + 180
             dos = (x * x + y * y) ** 0.5
             picked.swoosh_xos = x / dos
             picked.swoosh_yos = y / dos
@@ -268,6 +297,14 @@ class Game:
 
         self.raft.sort(key = lambda x:x.cam.p.x)
 
+        gone = 0
+        for raft in self.raft:
+            if raft.state == actor.GONE or raft.state == actor.WON: gone += 1
+
+        if gone == 7:
+            self.title.ending()
+            self.show_title(True)
+
         closest = self.find_closest_raft_on_screen(mx.v, my.v)
 
         dragon_close = self.find_closest_raft_to(self.dragon.cam.p)
@@ -275,14 +312,24 @@ class Game:
             self.dragon.target = dragon_close[1]
 
         if self.input.key_released.get(ALLEGRO_KEY_BUTTON_A, False):
+            if self.picked:
+                audio.play(self.swoosh)
             self.picked = None
 
         r = self.dw / 20
         if self.input.key_pressed.get(ALLEGRO_KEY_BUTTON_A, False) and closest:
             if closest[0] < r * r:
                 self.picked = closest[1], mx.v, my.v, closest[1].xos, closest[1].yos
+                audio.play(self.rubber)
 
         self.t += 1
+
+    def show_title(self, yes):
+        self.showing_title = yes
+        if yes:
+            audio.load_music(self.path + "/data/the skye boat song.ogg")
+        else:
+            audio.load_music(self.path + "/data/sugar plum fairies.ogg")
 
     def resize(self, w, h):
         self.dw = w

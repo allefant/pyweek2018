@@ -69,11 +69,19 @@ attribute vec4 al_color;
 attribute vec3 al_user_attr_0;
 uniform mat4 al_projview_matrix;
 uniform vec3 light_direction;
+uniform int gray;
 varying vec4 color;
 varying float light;
 void main() {
   light = dot(al_user_attr_0, light_direction);
-  color = al_color;
+  if (gray == 1) {
+    float c = al_color.x * 0.3f + al_color.y * 0.6f + al_color.z * 0.1f;
+    c = c * 0.5f;
+    color = vec4(c, c, c, 0.5);
+  }
+  else {
+    color = al_color;
+  }
   gl_Position = al_projview_matrix * al_pos;
 }
         """)
@@ -143,10 +151,13 @@ def render_grid_actors(game, ct, pt, x, y, w, h):
                 render_actor(game, a, ct, pt)
 
 def render_actor(game, actor, ct, pt):
-    frame = actor.frame_t + (game.t // 4)
-    frame %= 8
-    if frame > 4: frame = -frame + 5 + 3
-    mesh = actor.profession[frame]
+    if len(actor.profession) == 5:
+        frame = actor.frame_t + (game.t // 4)
+        frame %= 8
+        if frame > 4: frame = -frame + 5 + 3
+        mesh = actor.profession[frame]
+    else:
+        mesh = actor.profession[0]
 
     c = actor.cam
     at = render_actor_transform(actor)
@@ -172,7 +183,12 @@ def render_actor(game, actor, ct, pt):
     al_compose_transform(t, ct)
 
     al_use_transform(t)
+
+    if actor.gray: al_set_shader_int("gray", 1)
+
     render_mesh(mesh)
+
+    if actor.gray: al_set_shader_int("gray", 0) 
 
     if not actor.static:
         p = (c_float * 3)(0, 0, 0)
