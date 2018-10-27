@@ -1,3 +1,6 @@
+edit = False
+skip = 0
+
 from allegro import *
 import controls
 import mesh
@@ -40,12 +43,17 @@ class Game:
         self.river = mesh.read_frames(self.path + "/data/perlin.mesh.gz")
         self.dragon_p = mesh.read_frames(self.path + "/data/dragon.mesh.gz")
         self.pine_p = mesh.read_frames(self.path + "/data/pine.mesh.gz")
+        self.finish_p = mesh.read_frames(self.path + "/data/finish.mesh.gz")
+        self.wolf_p = mesh.read_frames(self.path + "/data/wolf.mesh.gz")
 
         self.roar = audio.load(self.path + "/data/wumpus dines.ogg")
         self.swoosh = audio.load(self.path + "/data/swoosh.ogg")
         self.yelp = audio.load(self.path + "/data/yelp.ogg")
         self.jingle = audio.load(self.path + "/data/jingle.ogg")
         self.rubber = audio.load(self.path + "/data/rubber.ogg")
+        self.growl = audio.load(self.path + "/data/growl.ogg")
+        self.chew = audio.load(self.path + "/data/chew.ogg")
+        self.dogyelp = audio.load(self.path + "/data/dogyelp.ogg")
 
         self.zoom = 0
         self.rotation = pi / 4
@@ -57,6 +65,15 @@ class Game:
         self.silver = al_color_name("silver")
 
         self.t = 0
+        self.spawn = [(128 * 9 - 30, 10),
+            (128 * 10 + 40, 10),
+            (128 * 11 + 30, 110),
+            (128 * 12 + 0, 10),
+            (128 * 13 + 0, 10),
+            (128 * 13 + 64, 110),
+            (128 * 14 + 0, 10),
+            (128 * 14 + 64, 110),
+            (128 * 15 + 0, 10)]
 
         self.fps = [0, 0, 0, 0, 0, 0]
         self.fps_t = 0
@@ -68,19 +85,28 @@ class Game:
         with open(self.path + "/data/objects.json", "r") as j:
             self.objects = json.load(j)
             for o in self.objects:
-                self.actors.new(self.pine_p, o["x"], o["y"], radius = 8, scale = 8, static = True)
+                t = self.actors.new(self.pine_p, o["x"], o["y"], radius = 8, scale = 8, static = True)
+                t.cam.rotate(vector.z, random.uniform(-pi, pi))
+                t.cam.rotate(vector.y, pi / 8)
+
+        t = self.actors.new(self.finish_p, 128 * 16 - 32, 48, z = 20, scale = 20, static = True)
+        t.cam.rotate(vector.z, -pi / 2)
+        t.cam.rotate(vector.y, pi / 8)
 
         self.picked = None
 
         self.resize(1280, 720)
 
         self.raft = []
+        self.raft_and_wolf = []
         for i in range(7):
-            x = 16 #+ 128 * 15
+            x = 16 + skip
             y = 64
             r = self.actors.new(self.raft_p[i], x, y)
             r.color = al_color_name(colors[i])
+            r.color_index = i
             self.raft.append(r)
+            self.raft_and_wolf.append(r)
 
         self.dragon = self.actors.new(self.dragon_p, -100, 64, flying = True,
             scale = 5, z = 20)
@@ -108,8 +134,9 @@ class Game:
         self.scroll += amount
         last = self.get_last()
         first = self.raft[-1]
-        if self.scroll < last.cam.p.x: self.scroll = last.cam.p.x
-        if self.scroll > first.cam.p.x + 64: self.scroll = first.cam.p.x + 64
+        if not edit:
+            if self.scroll < last.cam.p.x: self.scroll = last.cam.p.x
+            if self.scroll > first.cam.p.x + 64: self.scroll = first.cam.p.x + 64
         self.camera.center_on(self.scroll, 64)
 
     def draw(self):
@@ -192,11 +219,12 @@ class Game:
         self.fps[0] += 1
 
         al_draw_text(self.font, al_map_rgb_f(0, 0, 0), 0, 0, 0,
-            "fps %.1f %.1f" % (self.fps[1], sum(self.fps[1:]) / 5))
+            "fps %.1f (%.1f 5s) x=%.0f" % (self.fps[1], sum(self.fps[1:]) / 5,
+            self.scroll))
 
-    def find_closest_raft_on_screen(self, x, y):
+    def find_closest_raft_or_wolf_on_screen(self, x, y):
         closest = None
-        for a in self.raft:
+        for a in self.raft_and_wolf:
             if a.state != actor.FLOWING: continue
             dx = a.xos - x
             dy = a.yos - y
@@ -209,6 +237,7 @@ class Game:
         closest = None
         for a in self.raft:
             if a.state != actor.FLOWING: continue
+            if a.wolf: continue
             d = a.cam.p - pos
             d = d * d
             if closest is None or d < closest[0]:
@@ -233,7 +262,7 @@ class Game:
         else:
             last = self.get_last()
             if last.cam.p.x > self.scroll - 20:
-                self.scroll_camera(0.1)
+                self.scroll_camera(0.3)
             
         if self.input.mz.d:
             self.zoom -= self.input.mz.d * 0.1
@@ -246,7 +275,7 @@ class Game:
         if self.input.key_pressed.get(ALLEGRO_KEY_M, False):
             audio.toggle()
 
-        if self.input.key_pressed.get(ALLEGRO_KEY_T, False):
+        if edit and self.input.key_pressed.get(ALLEGRO_KEY_T, False):
             c = self.camera
             ct = ALLEGRO_TRANSFORM()
             al_build_camera_transform(ct,
@@ -261,6 +290,15 @@ class Game:
                 json.dump(self.objects, j, indent = 2)
 
         if self.paused: return
+
+        first = self.raft[-1]
+        if self.spawn and first.cam.p.x + 64 > self.spawn[0][0]:
+            sx, sy = self.spawn.pop(0)
+            wolf = self.actors.new(self.wolf_p, sx, sy, wolf = True)
+            wolf.cam.rotate(vector.z, random.uniform(-pi, pi))
+            wolf.color = al_color_name("gray")
+            self.raft_and_wolf.append(wolf)
+            audio.play(self.growl)
 
         if self.picked:
             picked, px, py, sx, sy = self.picked
@@ -282,11 +320,12 @@ class Game:
             d = vector.Vector(f[0], f[1], 0)
             if d.length() > 0.5:
                 d = d / d.length() * 0.5
-            picked.swoosh = d
-            picked.swoosh_t = self.t + 180
             dos = (x * x + y * y) ** 0.5
-            picked.swoosh_xos = x / dos
-            picked.swoosh_yos = y / dos
+            if dos > 0.01:
+                picked.swoosh = d
+                picked.swoosh_t = self.t + 180
+                picked.swoosh_xos = x / dos
+                picked.swoosh_yos = y / dos
 
         gone = None
         for a in self.actors:
@@ -294,6 +333,12 @@ class Game:
             if a.state == actor.GONE: gone = a
         if gone:
             self.actors.remove(gone)
+
+        gone = None
+        for a in self.raft_and_wolf:
+            if a.state == actor.GONE: gone = a
+        if gone:
+            self.raft_and_wolf.remove(gone)
 
         self.raft.sort(key = lambda x:x.cam.p.x)
 
@@ -304,8 +349,9 @@ class Game:
         if gone == 7:
             self.title.ending()
             self.show_title(True)
+            return
 
-        closest = self.find_closest_raft_on_screen(mx.v, my.v)
+        closest = self.find_closest_raft_or_wolf_on_screen(mx.v, my.v)
 
         dragon_close = self.find_closest_raft_to(self.dragon.cam.p)
         if dragon_close:

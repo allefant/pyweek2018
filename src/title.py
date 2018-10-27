@@ -16,6 +16,7 @@ Snow Hill
 
 Seven mages went for a boat ride.
 . But they forgot their boats.
+.
 
 :g Let me cast a nature spell
 . so trees are growing from the ground
@@ -44,7 +45,9 @@ Seven mages went for a boat ride.
 .
 :s Ahhh! I see a dragon in the distance!
 . Let me put a curse on it!
+.
 . wait, I think that made it angry
+.
 :b This is getting bad...
 . I'll cast a flow spell
 . to safely guide us down!
@@ -64,6 +67,10 @@ Nudge the rafts away from the edge
 """
 
 ending = """
+/Game Over
+*Game Won
+.
+
 :g! That was no fun. I didn't make it.
 .
 :g* That was fun! And very easy.
@@ -76,7 +83,7 @@ ending = """
 . I am among the ones who made it!
 .
 
-:s! I hate this game, I got killed.
+:s! I hate this game, way too hard.
 .
 :s* I hate this game, way too easy.
 .
@@ -108,6 +115,12 @@ ending = """
 
 
 Thanks for playing!
+.
+. Thanks everyone for a fun week!
+.
+.
+.
+.
 . See you next pyweek!
 .
 .
@@ -156,6 +169,7 @@ class Title:
         self.landscape = landscape.Landscape(self.river)
         self.actors = actor.Actors(self.landscape)
         self.pos = 0
+        self.died = 0
 
         self.parse_text(story)
 
@@ -176,21 +190,28 @@ class Title:
         s = 0
         dur = 80
         self.specials = []
+        self.special = 0
         for row in rows:
             g = game.get()
             prev = None
             start = s
             speaker = 0
             gone = False
+            if row.startswith("/"):
+                row = row[1:]
+                if self.died < 7: gone = True
+            if row.startswith("*"):
+                row = row[1:]
+                if self.died == 7: gone = True
             if row.startswith(":"):
                 speaker = get_speaker(row[1])
                 if row[2] == "!":
-                    if g.raft[speaker - 1].state == actor.GONE:
+                    if speaker - 1 in self.dead_colors:
                         row = row[4:]
                     else:
                         gone = True
                 elif row[2] == "*":
-                    if g.raft[speaker - 1].state != actor.GONE:
+                    if speaker - 1 not in self.dead_colors:
                         row = row[4:]
                     else:
                         gone = True
@@ -262,7 +283,7 @@ class Title:
                 al_draw_line(mage.xos, mage.yos, x, y, color, 3)
 
             al_draw_filled_rectangle(x - w / 2, y, x + w / 2, y + 50,
-                al_color_name("gray"))
+                al_map_rgba_f(0.5, 0.5, 0.5, .9))
             al_draw_text(g.font_big, color,
                 x, y, ALLEGRO_ALIGN_CENTRE, span.text)
             
@@ -275,10 +296,13 @@ class Title:
                 g.input.key_pressed.get(ALLEGRO_KEY_ENTER, False):
             g.show_title(False)
             return
+
+        if g.input.key_pressed.get(ALLEGRO_KEY_SPACE, False):
+            self.t += 80
         
         self.t += 1
-        for s in self.specials:
-            if s == self.t:
+        for s in self.specials[self.special:]:
+            if self.t >= s:
                 self.special += 1
                 if self.special == 1:
                     for i in range(7):
@@ -304,8 +328,23 @@ class Title:
     def ending(self):
         g = game.get()
         self.t = 0
-        self.parse_text(ending)
-        for i, a in enumerate(self.actors):
-            if g.raft[i].state == actor.GONE:
+        self.died = 0
+        self.pos = 0
+
+        self.dead_colors = set()
+        for r in g.raft:
+            if r.state == actor.GONE:
+                self.died += 1
+                self.dead_colors.add(r.color_index)
+
+        self.actors = actor.Actors(self.landscape)
+        self.mages = []
+        for i in range(7):
+            a = self.actors.new(g.mage_p[i], 64 + (i - 3.5) * 10, 64)
+            a.cam.rotate(vector.z, pi)
+            self.mages.append(a)
+            if i in self.dead_colors:
                 a.gray = 1
-            
+
+        self.parse_text(ending)
+

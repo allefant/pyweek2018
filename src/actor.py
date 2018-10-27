@@ -33,6 +33,7 @@ class Actors:
             if key == "z": a.cam.p.z = val
             if key == "static": a.static = True
             if key == "radius": a.radius = val
+            if key == "wolf": a.wolf = True
         if not a.static:
             self.actors.append(a)
         return a
@@ -103,6 +104,7 @@ class Actor:
         self.xos = 0
         self.yos = 0
         self.gray = 0
+        self.wolf = False
 
         self.ground_normal = vector.z
 
@@ -150,9 +152,9 @@ class Actor:
                 if dist.length() < 5:
                     self.target.state = EATEN
                     self.target.t = g.t + 120
+                    self.target.gray = 1
                     self.target = None
                     audio.play(g.roar)
-                    self.gray = 1
 
         elif self.state == WON:
             self.v *= 0.98
@@ -181,6 +183,25 @@ class Actor:
                         self.v = self.v + (v.x * 0.22, v.y * 0.22)
                 else:
                     self.v = self.v + (0.15, 0, 0)
+            elif self.wolf:
+                if self.target:
+                    v = self.target.cam.p - (self.cam.p - self.cam.y * 3)
+                    v.z = 0
+                    if v.length() < 3:
+                        self.target.state = FALLING
+                        self.target.t = g.t
+                        self.target.gray = 1
+                        audio.play(g.chew)
+                        audio.play(g.yelp)
+                        self.target = None
+                    else:
+                        v = v.normalize()
+                        self.v = self.v + (v.x * 0.4, v.y * 0.4)
+                else:
+                    closest = g.find_closest_raft_to(self.cam.p)
+                    if closest:
+                        self.target = closest[1]
+                self.v = self.v + (0, 0, -0.3)
             else:
                 self.v = self.v + (0.2, 0, -0.3)
 
@@ -233,7 +254,7 @@ class Actor:
             if not self.flying:
                 if self.cam.p.x < 0 or self.cam.p.y < 0 or self.cam.p.y > 128:
                     self.state = FALLING
-                    audio.play(g.yelp)
+                    audio.play(g.dogyelp if self.wolf else g.yelp)
                     self.t = g.t
                     self.gray = 1
 

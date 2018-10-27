@@ -75,9 +75,8 @@ varying float light;
 void main() {
   light = dot(al_user_attr_0, light_direction);
   if (gray == 1) {
-    float c = al_color.x * 0.3f + al_color.y * 0.6f + al_color.z * 0.1f;
-    c = c * 0.5f;
-    color = vec4(c, c, c, 0.5);
+    float c = al_color.x * 0.3 + al_color.y * 0.6 + al_color.z * 0.1;
+    color = vec4(c, c, c, 1);
   }
   else {
     color = al_color;
